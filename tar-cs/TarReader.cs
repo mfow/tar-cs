@@ -75,17 +75,21 @@ namespace tar_cs
         {
             Debug.WriteLine("tar stream position Read in: " + inStream.Position);
             int readBytes;
-            byte[] read;
-            while ((readBytes = Read(out read)) != -1)
+            while ((readBytes = await ReadAsync(dataBuffer)) != -1)
             {
                 Debug.WriteLine("tar stream position Read while(...) : " + inStream.Position);
-                await dataDestanation.WriteAsync(read, 0, readBytes);
+                await dataDestanation.WriteAsync(dataBuffer, 0, readBytes);
             }
             Debug.WriteLine("tar stream position Read out: " + inStream.Position);
         }
 
-        protected int Read(out byte[] buffer)
+        protected async Task<int> ReadAsync(byte[] buffer)
         {
+            if (buffer == null)
+            {
+                throw new ArgumentNullException(nameof(buffer));
+            }
+
             if(remainingBytesInFile == 0)
             {
                 buffer = null;
@@ -107,7 +111,7 @@ namespace tar_cs
             do
             {
 
-                bytesRead = inStream.Read(dataBuffer, (int)(toRead-bytesRemainingToRead), (int)bytesRemainingToRead);
+                bytesRead = await inStream.ReadAsync(buffer, (int)(toRead-bytesRemainingToRead), (int)bytesRemainingToRead);
                 bytesRemainingToRead -= bytesRead;
                 remainingBytesInFile -= bytesRead;
             } while (bytesRead < toRead && bytesRemainingToRead > 0);
@@ -117,13 +121,14 @@ namespace tar_cs
                 inStream.Seek(align512, SeekOrigin.Current);
             }
             else
-                while(align512 > 0)
+            {
+                while (align512 > 0)
                 {
                     inStream.ReadByte();
                     --align512;
                 }
-                
-            buffer = dataBuffer;
+            }
+            
             return bytesRead;
         }
 
@@ -171,8 +176,7 @@ namespace tar_cs
                 }
                 else
                 {
-                    byte[] buffer;
-                    while (Read(out buffer) > 0)
+                    while (await ReadAsync(dataBuffer) > 0)
                     {
                     }
                 }
