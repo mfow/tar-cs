@@ -4,9 +4,11 @@ C# Library to work with tar archives
 
 ## News
 
-Updated featured source to tar-cs_20140118 including most recent source from version control.
+- Forked from https://code.google.com/archive/p/tar-cs/
 
-Switched version control from SVN to GIT.
+- Updated featured source to tar-cs_20140118 including most recent source from version control.
+
+- Switched version control from SVN to GIT.
 
 ## Pre
 
