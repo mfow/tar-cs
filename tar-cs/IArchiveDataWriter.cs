@@ -1,4 +1,6 @@
-﻿namespace tar_cs
+﻿using System.Threading.Tasks;
+
+namespace tar_cs
 {
     public interface IArchiveDataWriter
     {
@@ -7,8 +9,9 @@
         /// </summary>
         /// <param name="buffer">data storage</param>
         /// <param name="count">how many bytes to be written to the corresponding archive</param>
-        int Write(byte[] buffer, int count);
+        Task<int> WriteAsync(byte[] buffer, int count);
         bool CanWrite { get; }
     }
-    public delegate void WriteDataDelegate(IArchiveDataWriter writer);
+
+    public delegate Task WriteDataAsyncCallback(IArchiveDataWriter writer);
 }

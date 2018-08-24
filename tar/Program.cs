@@ -1,12 +1,13 @@
 ﻿using System;
 using System.IO;
+using System.Threading.Tasks;
 using tar_cs;
 
 namespace tar
 {
     internal class Program
     {
-        private static void Main(string[] args)
+        private static async Task Main(string[] args)
         {
             if (args.Length < 2)
             {
@@ -16,10 +17,10 @@ namespace tar
             using (var archUsTar = File.Create(args[0]))
             using (var tar = new TarWriter(archUsTar))
             {
-                tar.WriteDirectoryEntry("test_dir");
+                await tar.WriteDirectoryEntryAsync("test_dir");
                 for (int i = 1; i < args.Length; ++i)
                 {
-                    tar.Write(args[i]);
+                    await tar.WriteAsync(args[i]);
                 }
                 
             }
@@ -28,7 +29,7 @@ namespace tar
             using (var examiner = File.OpenRead(args[0]))
             {
                 TarReader tar = new TarReader(examiner);
-                while (tar.MoveNext(true))
+                while (await tar.MoveNextAsync(true))
                 {
                     Console.WriteLine("File: {0}, Owner: {1}", tar.FileInfo.FileName, tar.FileInfo.UserName);
                 }
@@ -37,7 +38,7 @@ namespace tar
             using (var unarchFile = File.OpenRead(args[0]))
             {
                 TarReader reader = new TarReader(unarchFile);
-                reader.ReadToEnd("out_dir\\data");
+                await reader.ReadToEndAsync("out_dir\\data");
             }
         }
     }

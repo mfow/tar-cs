@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace tar_cs
 {
@@ -10,7 +11,8 @@ namespace tar_cs
         {
         }
 
-        protected override void WriteHeader(string name, DateTime lastModificationTime, long count, int userId, int groupId, int mode, EntryType entryType)
+        protected override async Task WriteHeaderAsync(string name, DateTime lastModificationTime,
+            long count, int userId, int groupId, int mode, EntryType entryType)
         {
             var tarHeader = new UsTarHeader()
             {
@@ -24,10 +26,12 @@ namespace tar_cs
                 Mode = mode,
                 EntryType = entryType
             };
-            OutStream.Write(tarHeader.GetHeaderValue(), 0, tarHeader.HeaderSize);
+
+            await OutStream.WriteAsync(tarHeader.GetHeaderValue(), 0, tarHeader.HeaderSize);
         }
 
-        protected virtual void WriteHeader(string name, DateTime lastModificationTime, long count, string userName, string groupName, int mode)
+        protected virtual async Task WriteHeaderAsync(string name, DateTime lastModificationTime, long count,
+            string userName, string groupName, int mode)
         {
             var tarHeader = new UsTarHeader()
             {
@@ -40,28 +44,31 @@ namespace tar_cs
                 GroupName = groupName,
                 Mode = mode
             };
-            OutStream.Write(tarHeader.GetHeaderValue(), 0, tarHeader.HeaderSize);
+
+            await OutStream.WriteAsync(tarHeader.GetHeaderValue(), 0, tarHeader.HeaderSize);
         }
 
 
-        public virtual void Write(string name, long dataSizeInBytes, string userName, string groupName, int mode, DateTime lastModificationTime, WriteDataDelegate writeDelegate)
+        public virtual async Task WriteAsync(string name, long dataSizeInBytes, string userName, string groupName,
+            int mode, DateTime lastModificationTime, WriteDataAsyncCallback callback)
         {
             var writer = new DataWriter(OutStream,dataSizeInBytes);
-            WriteHeader(name, lastModificationTime, dataSizeInBytes, userName, groupName, mode);
+            await WriteHeaderAsync(name, lastModificationTime, dataSizeInBytes, userName, groupName, mode);
+
             while(writer.CanWrite)
             {
-                writeDelegate(writer);
+                await callback(writer);
             }
-            AlignTo512(dataSizeInBytes, false);
+            await AlignTo512Async(dataSizeInBytes, false);
         }
 
 
-        public void Write(Stream data, long dataSizeInBytes, string fileName, string userId, string groupId, int mode,
+        public async Task WriteAsync(Stream data, long dataSizeInBytes, string fileName, string userId, string groupId, int mode,
                           DateTime lastModificationTime)
         {
-            WriteHeader(fileName,lastModificationTime,dataSizeInBytes,userId, groupId, mode);
-            WriteContent(dataSizeInBytes,data);
-            AlignTo512(dataSizeInBytes,false);
+            await WriteHeaderAsync(fileName,lastModificationTime,dataSizeInBytes,userId, groupId, mode);
+            await WriteContentAsync(dataSizeInBytes,data);
+            await AlignTo512Async(dataSizeInBytes,false);
         }
     }
 }

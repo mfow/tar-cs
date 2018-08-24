@@ -1,4 +1,6 @@
+using System;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace tar_cs
 {
@@ -6,21 +8,21 @@ namespace tar_cs
     {
         private readonly long size;
         private long remainingBytes;
-        private bool canWrite = true;
         private readonly Stream stream;
+        public bool CanWrite { get; private set; } = true;
 
         public DataWriter(Stream data, long dataSizeInBytes)
         {
             size = dataSizeInBytes;
             remainingBytes = size;
-            stream = data;
+            stream = data ?? throw new ArgumentNullException(nameof(data));
         }
 
-        public int Write(byte[] buffer, int count)
+        public async Task<int> WriteAsync(byte[] buffer, int count)
         {
             if(remainingBytes == 0)
             {
-                canWrite = false;
+                CanWrite = false;
                 return -1;
             }
             int bytesToWrite;
@@ -32,17 +34,9 @@ namespace tar_cs
             {
                 bytesToWrite = count;
             }
-            stream.Write(buffer,0,bytesToWrite);
+            await stream.WriteAsync(buffer,0,bytesToWrite);
             remainingBytes -= bytesToWrite;
             return bytesToWrite;
-        }
-
-        public bool CanWrite
-        {
-            get
-            {
-                return canWrite;
-            }
         }
     }
 }

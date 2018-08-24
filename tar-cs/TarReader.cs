@@ -1,6 +1,8 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 
 namespace tar_cs
 {
@@ -20,7 +22,7 @@ namespace tar_cs
         /// <param name="tarredData">A stream to read tar archive from</param>
         public TarReader(Stream tarredData)
         {
-            inStream = tarredData;
+            inStream = tarredData ?? throw new ArgumentException(nameof(tarredData));
             header = new UsTarHeader();
         }
 
@@ -40,9 +42,9 @@ namespace tar_cs
         /// If you are not sure about the source of an archive you extracting,
         /// then use MoveNext and Read and handle paths like ".." and "../.." according
         /// to your business logic.
-        public void ReadToEnd(string destDirectory)
+        public async Task ReadToEndAsync(string destDirectory)
         {
-            while (MoveNext(false))
+            while (await MoveNextAsync(false))
             {
                 string fileNameFromArchive = FileInfo.FileName;
                 string totalPath = destDirectory + Path.DirectorySeparatorChar + fileNameFromArchive;
@@ -58,7 +60,7 @@ namespace tar_cs
                 Directory.CreateDirectory(directory);
                 using (FileStream file = File.Create(totalPath))
                 {
-                    Read(file);
+                    await ReadAsync(file);
                 }
             }
         }
@@ -69,7 +71,7 @@ namespace tar_cs
         /// <param name="dataDestanation">A stream to read data to</param>
         /// 
         /// <seealso cref="MoveNext"/>
-        public void Read(Stream dataDestanation)
+        public async Task ReadAsync(Stream dataDestanation)
         {
             Debug.WriteLine("tar stream position Read in: " + inStream.Position);
             int readBytes;
@@ -77,7 +79,7 @@ namespace tar_cs
             while ((readBytes = Read(out read)) != -1)
             {
                 Debug.WriteLine("tar stream position Read while(...) : " + inStream.Position);
-                dataDestanation.Write(read, 0, readBytes);
+                await dataDestanation.WriteAsync(read, 0, readBytes);
             }
             Debug.WriteLine("tar stream position Read out: " + inStream.Position);
         }
@@ -151,7 +153,7 @@ namespace tar_cs
         ///     Read(dataDestStream); 
         /// }
         /// <seealso cref="Read(Stream)"/>
-        public bool MoveNext(bool skipData)
+        public async Task<bool> MoveNextAsync(bool skipData)
         {
             Debug.WriteLine("tar stream position MoveNext in: " + inStream.Position);
             if (remainingBytesInFile > 0)
@@ -181,7 +183,7 @@ namespace tar_cs
             int bytesRemaining = header.HeaderSize;
             do
             {
-                headerRead = inStream.Read(bytes, header.HeaderSize - bytesRemaining, bytesRemaining);
+                headerRead = await inStream.ReadAsync(bytes, header.HeaderSize - bytesRemaining, bytesRemaining);
                 bytesRemaining -= headerRead;
                 if (headerRead <= 0 && bytesRemaining > 0)
                 {

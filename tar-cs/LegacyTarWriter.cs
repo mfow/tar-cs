@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using tar_cs;
 
 namespace tar_cs
@@ -36,7 +37,7 @@ namespace tar_cs
         #endregion
 
 
-        public void WriteDirectoryEntry(string path,int userId, int groupId, int mode)
+        public async Task WriteDirectoryEntryAsync(string path, int userId, int groupId, int mode)
         {
             if (string.IsNullOrEmpty(path))
                 throw new ArgumentNullException("path");
@@ -53,83 +54,83 @@ namespace tar_cs
             {
                 lastWriteTime = DateTime.Now;
             }
-            WriteHeader(path, lastWriteTime, 0, userId, groupId, mode, EntryType.Directory);
+            await WriteHeaderAsync(path, lastWriteTime, 0, userId, groupId, mode, EntryType.Directory);
         }
 
-        public void WriteDirectoryEntry(string path)
+        public async Task WriteDirectoryEntryAsync(string path)
         {
-            WriteDirectoryEntry(path, 101, 101, 0777);
+            await WriteDirectoryEntryAsync(path, 101, 101, 0777);
         }
 
-        public void WriteDirectory(string directory, bool doRecursive)
+        public async Task WriteDirectoryAsync(string directory, bool doRecursive)
         {
             if (string.IsNullOrEmpty(directory))
                 throw new ArgumentNullException("directory");
 
-            WriteDirectoryEntry(directory);
+            await WriteDirectoryEntryAsync(directory);
 
             string[] files = Directory.GetFiles(directory);
-            foreach(var fileName in files)
+            foreach (var fileName in files)
             {
-                Write(fileName);
+                await WriteAsync(fileName);
             }
 
             string[] directories = Directory.GetDirectories(directory);
-            foreach(var dirName in directories)
+            foreach (var dirName in directories)
             {
-                WriteDirectoryEntry(dirName);
-                if(doRecursive)
+                await WriteDirectoryEntryAsync(dirName);
+                if (doRecursive)
                 {
-                    WriteDirectory(dirName,true);
+                    await WriteDirectoryAsync(dirName, true);
                 }
             }
         }
 
 
-        public void Write(string fileName)
+        public async Task WriteAsync(string fileName)
         {
-            if(string.IsNullOrEmpty(fileName))
+            if (string.IsNullOrEmpty(fileName))
                 throw new ArgumentNullException("fileName");
             using (FileStream file = File.OpenRead(fileName))
             {
-                Write(file, file.Length, fileName, 61, 61, 511, File.GetLastWriteTime(file.Name));
+                await WriteAsync(file, file.Length, fileName, 61, 61, 511, File.GetLastWriteTime(file.Name));
             }
         }
 
-        public void Write(FileStream file)
+        public async Task WriteAsync(FileStream file)
         {
-            string path = Path.GetFullPath(file.Name).Replace(Path.GetPathRoot(file.Name),string.Empty);
+            string path = Path.GetFullPath(file.Name).Replace(Path.GetPathRoot(file.Name), string.Empty);
             path = path.Replace(Path.DirectorySeparatorChar, '/');
-            Write(file, file.Length, path, 61, 61, 511, File.GetLastWriteTime(file.Name));
+            await WriteAsync(file, file.Length, path, 61, 61, 511, File.GetLastWriteTime(file.Name));
         }
 
-        public void Write(Stream data, long dataSizeInBytes, string name)
+        public Task WriteAsync(Stream data, long dataSizeInBytes, string name)
         {
-            Write(data, dataSizeInBytes, name, 61, 61, 511, DateTime.Now);
+            return WriteAsync(data, dataSizeInBytes, name, 61, 61, 511, DateTime.Now);
         }
 
-        public virtual void Write(string name, long dataSizeInBytes, int userId, int groupId, int mode, DateTime lastModificationTime, WriteDataDelegate writeDelegate)
+        public virtual async Task WriteAsync(string name, long dataSizeInBytes, int userId, int groupId, int mode, DateTime lastModificationTime, WriteDataAsyncCallback callback)
         {
             IArchiveDataWriter writer = new DataWriter(OutStream, dataSizeInBytes);
-            WriteHeader(name, lastModificationTime, dataSizeInBytes, userId, groupId, mode, EntryType.File);
-            while(writer.CanWrite)
+            await WriteHeaderAsync(name, lastModificationTime, dataSizeInBytes, userId, groupId, mode, EntryType.File);
+            while (writer.CanWrite)
             {
-                writeDelegate(writer);
+                await callback(writer);
             }
-            AlignTo512(dataSizeInBytes, false);
+            await AlignTo512Async(dataSizeInBytes, false);
         }
 
-        public virtual void Write(Stream data, long dataSizeInBytes, string name, int userId, int groupId, int mode,
+        public virtual async Task WriteAsync(Stream data, long dataSizeInBytes, string name, int userId, int groupId, int mode,
                                   DateTime lastModificationTime)
         {
-            if(isClosed)
+            if (isClosed)
                 throw new TarException("Can not write to the closed writer");
-            WriteHeader(name, lastModificationTime, dataSizeInBytes, userId, groupId, mode, EntryType.File);
-            WriteContent(dataSizeInBytes, data);
-            AlignTo512(dataSizeInBytes,false);
+            await WriteHeaderAsync(name, lastModificationTime, dataSizeInBytes, userId, groupId, mode, EntryType.File);
+            await WriteContentAsync(dataSizeInBytes, data);
+            await AlignTo512Async(dataSizeInBytes, false);
         }
 
-        protected void WriteContent(long count, Stream data)
+        protected async Task WriteContentAsync(long count, Stream data)
         {
             while (count > 0 && count > buffer.Length)
             {
@@ -143,12 +144,12 @@ namespace tar_cs
                     else
                         break;
                 }
-                OutStream.Write(buffer, 0, bytesRead);
+                await OutStream.WriteAsync(buffer, 0, bytesRead);
                 count -= bytesRead;
             }
             if (count > 0)
             {
-                int bytesRead = data.Read(buffer, 0, (int) count);
+                int bytesRead = await data.ReadAsync(buffer, 0, (int)count);
                 if (bytesRead < 0)
                     throw new IOException("LegacyTarWriter unable to read from provided stream");
                 if (bytesRead == 0)
@@ -160,29 +161,31 @@ namespace tar_cs
                     }
                 }
                 else
-                    OutStream.Write(buffer, 0, bytesRead);
+                {
+                    await OutStream.WriteAsync(buffer, 0, bytesRead);
+                }
             }
         }
 
-        protected virtual void WriteHeader(string name, DateTime lastModificationTime, long count, int userId, int groupId, int mode, EntryType entryType)
+        protected virtual async Task WriteHeaderAsync(string name, DateTime lastModificationTime,
+            long count, int userId, int groupId, int mode, EntryType entryType)
         {
             var header = new TarHeader
-                         {
-                             FileName = name,
-                             LastModification = lastModificationTime,
-                             SizeInBytes = count,
-                             UserId = userId,
-                             GroupId = groupId,
-                             Mode = mode,
-                             EntryType = entryType
-                         };
-            OutStream.Write(header.GetHeaderValue(), 0, header.HeaderSize);
+            {
+                FileName = name,
+                LastModification = lastModificationTime,
+                SizeInBytes = count,
+                UserId = userId,
+                GroupId = groupId,
+                Mode = mode,
+                EntryType = entryType
+            };
+            await OutStream.WriteAsync(header.GetHeaderValue(), 0, header.HeaderSize);
         }
 
-
-        public void AlignTo512(long size,bool acceptZero)
+        public async Task AlignTo512Async(long size, bool acceptZero)
         {
-            size = size%512;
+            size = size % 512;
             if (size == 0 && !acceptZero) return;
             while (size < 512)
             {
@@ -193,9 +196,14 @@ namespace tar_cs
 
         public virtual void Close()
         {
+            CloseAsync().Wait();
+        }
+
+        private async Task CloseAsync()
+        {
             if (isClosed) return;
-            AlignTo512(0,true);
-            AlignTo512(0,true);
+            await AlignTo512Async(0, true);
+            await AlignTo512Async(0, true);
             isClosed = true;
         }
     }
